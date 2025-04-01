@@ -146,7 +146,7 @@ def draw_start_screen():
     pygame.display.flip()
 
 def start_screen_animation():
-    """显示开机画面图片并停留5秒钟"""
+    """显示开机画面图片并等待按键"""
     screen.fill(BLACK)
     # 加载并显示开机画面图片
     start_screen_img = pygame.image.load("tank_startscreen.png")

@@ -37,6 +37,21 @@ DIFFICULTY = {
     "难": {"enemy_speed": 3, "bullet_speed": 4, "enemy_spawn_rate": 50}
 }
 
+# 在pygame初始化后，加载图片
+try:
+    # 加载坦克图片
+    red_tank_img = pygame.image.load("tank_redtank.png")
+    blue_tank_img = pygame.image.load("tank_bluetank.png")
+    
+    # 调整图片大小以匹配坦克尺寸
+    red_tank_img = pygame.transform.scale(red_tank_img, (TANK_WIDTH, TANK_HEIGHT))
+    blue_tank_img = pygame.transform.scale(blue_tank_img, (TANK_WIDTH, TANK_HEIGHT))
+    print("坦克图片加载成功！")
+except Exception as e:
+    print(f"图片加载失败: {e}")
+    pygame.quit()
+    sys.exit()
+
 class Tank:
     """坦克类"""
     def __init__(self, x, y, color, name):
@@ -46,12 +61,16 @@ class Tank:
         self.name = name
         self.speed = 5
         self.bullets = []
+        # 根据颜色选择对应的坦克图片
+        self.image = red_tank_img if color == RED else blue_tank_img
 
     def draw(self):
         """绘制坦克"""
-        pygame.draw.rect(screen, self.color, (self.x, self.y, TANK_WIDTH, TANK_HEIGHT))
-        text = font.render(self.name, True, WHITE)
-        screen.blit(text, (self.x + 10, self.y + 10))
+        # 使用图片替代矩形
+        screen.blit(self.image, (self.x, self.y))
+        if self.name:  # 只有玩家坦克显示名字
+            text = font.render(self.name, True, WHITE)
+            screen.blit(text, (self.x + 10, self.y + 10))
 
     def move(self, direction):
         """移动坦克"""
@@ -146,9 +165,9 @@ def draw_start_screen():
     pygame.display.flip()
 
 def start_screen_animation():
-    """显示开机画面图片并等待按键"""
-    screen.fill(BLACK)
-    # 加载并显示开机画面图片
+    """显示开机画面图片，按下任意键继续"""
+    screen.fill(BLACK)  # 清空屏幕，设置背景颜色
+    # 加载开机画面图片
     start_screen_img = pygame.image.load("tank_startscreen.png")
     
     # 获取图片尺寸
@@ -172,7 +191,6 @@ def start_screen_animation():
             elif event.type == pygame.KEYDOWN:  # 检测键盘按键
                 return  # 按下任意键后退出函数
 
-     
 def main():
     """主游戏函数"""
     # 显示开机画面

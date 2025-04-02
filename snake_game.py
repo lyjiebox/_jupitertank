@@ -26,7 +26,7 @@ clock = pygame.time.Clock()
 
 # 定义蛇的属性
 snake_block = 20    # 蛇身每一块的大小（像素）
-snake_speed = 10    # 蛇的移动速度（每秒移动的次数）
+snake_speed = 2    # 蛇的移动速度（每秒移动的次数）
 
 # 加载字体
 # 使用支持中文的字体文件 simhei.ttf

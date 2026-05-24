@@ -14,6 +14,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
+GRAY = (128, 128, 128)  # 障碍物颜色
 
 # 坦克尺寸
 TANK_WIDTH = 50
@@ -22,6 +23,11 @@ TANK_HEIGHT = 50
 # 炮弹尺寸
 BULLET_WIDTH = 10
 BULLET_HEIGHT = 20
+
+# 障碍物相关常量
+OBSTACLE_WIDTH = 30
+OBSTACLE_HEIGHT = 10
+OBSTACLE_COUNT = 4  # 障碍物数量
 
 # 初始化窗口
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -34,7 +40,7 @@ font = pygame.font.Font("simhei.ttf", 24)
 DIFFICULTY = {
     "易": {"enemy_speed": 1, "bullet_speed": 2, "enemy_spawn_rate": 100},
     "中": {"enemy_speed": 2, "bullet_speed": 3, "enemy_spawn_rate": 75},
-    "难": {"enemy_speed": 3, "bullet_speed": 4, "enemy_spawn_rate": 50}
+    "难": {"enemy_speed": 4, "bullet_speed": 7, "enemy_spawn_rate": 50}
 }
 
 # 在pygame初始化后，加载图片
@@ -61,6 +67,7 @@ class Tank:
         self.name = name
         self.speed = 5
         self.bullets = []
+        self.max_bullets = 3  # 最大炮弹数量
         # 根据颜色选择对应的坦克图片
         self.image = red_tank_img if color == RED else blue_tank_img
 
@@ -68,9 +75,9 @@ class Tank:
         """绘制坦克"""
         # 使用图片替代矩形
         screen.blit(self.image, (self.x, self.y))
-        if self.name:  # 只有玩家坦克显示名字
-            text = font.render(self.name, True, WHITE)
-            screen.blit(text, (self.x + 10, self.y + 10))
+#       if self.name:  # 只有玩家坦克显示名字
+#          text = font.render(self.name, True, WHITE)
+#            screen.blit(text, (self.x + 10, self.y + 10))
 
     def move(self, direction):
         """移动坦克"""
@@ -81,8 +88,9 @@ class Tank:
 
     def shoot(self):
         """发射炮弹"""
-        bullet = Bullet(self.x + TANK_WIDTH // 2 - BULLET_WIDTH // 2, self.y, -5)
-        self.bullets.append(bullet)
+        if len(self.bullets) < self.max_bullets:  # 检查炮弹数量
+            bullet = Bullet(self.x + TANK_WIDTH // 2 - BULLET_WIDTH // 2, self.y, -5)
+            self.bullets.append(bullet)
 
 class Bullet:
     """炮弹类"""
@@ -98,6 +106,43 @@ class Bullet:
     def move(self):
         """移动炮弹"""
         self.y += self.speed
+
+class Obstacle:
+    """障碍物类"""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.width = OBSTACLE_WIDTH
+        self.height = OBSTACLE_HEIGHT
+
+    def draw(self):
+        """绘制障碍物"""
+        pygame.draw.rect(screen, GRAY, (self.x, self.y, self.width, self.height))
+
+def generate_obstacles():
+    """生成随机位置的障碍物"""
+    obstacles = []
+    for _ in range(OBSTACLE_COUNT):
+        while True:
+            # 随机生成位置
+            x = random.randint(0, WINDOW_WIDTH - OBSTACLE_WIDTH)
+            y = random.randint(100, WINDOW_HEIGHT - 200)  # 避免在玩家坦克和顶部区域生成
+            
+            # 检查是否与其他障碍物重叠
+            overlap = False
+            for obs in obstacles:
+                if (x < obs.x + obs.width and 
+                    x + OBSTACLE_WIDTH > obs.x and 
+                    y < obs.y + obs.height and 
+                    y + OBSTACLE_HEIGHT > obs.y):
+                    overlap = True
+                    break
+            
+            if not overlap:
+                obstacles.append(Obstacle(x, y))
+                break
+    
+    return obstacles
 
 def draw_menu():
     """绘制难度选择菜单"""
@@ -203,6 +248,9 @@ def main():
         # 初始化我方坦克
         player = Tank(WINDOW_WIDTH // 2 - TANK_WIDTH // 2, WINDOW_HEIGHT - TANK_HEIGHT - 10, RED, "Jupiter")
 
+        # 生成障碍物
+        obstacles = generate_obstacles()
+
         # 敌方坦克和炮弹
         enemies = []
         enemy_bullets = []
@@ -215,6 +263,10 @@ def main():
 
         while running:
             screen.fill(BLACK)
+
+            # 绘制障碍物
+            for obstacle in obstacles:
+                obstacle.draw()
 
             # 处理事件
             for event in pygame.event.get():
@@ -247,17 +299,17 @@ def main():
                 enemy.draw()
 
                 # 敌方坦克发射炮弹
-                if random.randint(0, 100) < 5:
+                if random.randint(0, 100) < 5 and len(enemy.bullets) < enemy.max_bullets:  # 检查炮弹数量
                     bullet = Bullet(enemy.x + TANK_WIDTH // 2 - BULLET_WIDTH // 2, enemy.y + TANK_HEIGHT, DIFFICULTY[difficulty]["bullet_speed"])
-                    enemy_bullets.append(bullet)
+                    enemy.bullets.append(bullet)
+
+                # 更新敌方炮弹
+                for bullet in enemy.bullets[:]:
+                    bullet.move()
+                    bullet.draw()
 
             # 更新我方炮弹
             for bullet in player.bullets:
-                bullet.move()
-                bullet.draw()
-
-            # 更新敌方炮弹
-            for bullet in enemy_bullets:
                 bullet.move()
                 bullet.draw()
 
@@ -265,30 +317,95 @@ def main():
             player.draw()
 
             # 碰撞检测
-            for bullet in player.bullets:
-                for enemy in enemies:
+            # 1. 玩家子弹碰撞检测
+            for bullet in player.bullets[:]:  # 使用切片创建副本以避免在迭代时修改列表
+                # 检查子弹是否击中敌方坦克
+                for enemy in enemies[:]:
                     if (bullet.x < enemy.x + TANK_WIDTH and
                         bullet.x + BULLET_WIDTH > enemy.x and
                         bullet.y < enemy.y + TANK_HEIGHT and
                         bullet.y + BULLET_HEIGHT > enemy.y):
-                        player.bullets.remove(bullet)
-                        enemies.remove(enemy)
-                        score += 1
-                        if score >= 10:
-                            running = False
-                            win = True
+                        if bullet in player.bullets:
+                            player.bullets.remove(bullet)
+                        if enemy in enemies:
+                            enemies.remove(enemy)
+                            score += 1
+                        break
+                
+                # 检查子弹是否击中障碍物
+                for obstacle in obstacles:
+                    if (bullet.x < obstacle.x + obstacle.width and
+                        bullet.x + BULLET_WIDTH > obstacle.x and
+                        bullet.y < obstacle.y + obstacle.height and
+                        bullet.y + BULLET_HEIGHT > obstacle.y):
+                        if bullet in player.bullets:
+                            player.bullets.remove(bullet)
+                        break
 
-            for bullet in enemy_bullets:
-                if (bullet.x < player.x + TANK_WIDTH and
-                    bullet.x + BULLET_WIDTH > player.x and
-                    bullet.y < player.y + TANK_HEIGHT and
-                    bullet.y + BULLET_HEIGHT > player.y):
+            # 2. 敌方子弹碰撞检测
+            for enemy in enemies:
+                for bullet in enemy.bullets[:]:
+                    # 检查子弹是否击中玩家
+                    if (bullet.x < player.x + TANK_WIDTH and
+                        bullet.x + BULLET_WIDTH > player.x and
+                        bullet.y < player.y + TANK_HEIGHT and
+                        bullet.y + BULLET_HEIGHT > player.y):
+                        running = False
+                        win = False
+                        break
+                    
+                    # 检查子弹是否击中障碍物
+                    for obstacle in obstacles:
+                        if (bullet.x < obstacle.x + obstacle.width and
+                            bullet.x + BULLET_WIDTH > obstacle.x and
+                            bullet.y < obstacle.y + obstacle.height and
+                            bullet.y + BULLET_HEIGHT > obstacle.y):
+                            if bullet in enemy.bullets:
+                                enemy.bullets.remove(bullet)
+                            break
+
+            # 3. 障碍物碰撞检测
+            for obstacle in obstacles:
+                # 玩家坦克碰撞检测
+                if (player.x < obstacle.x + obstacle.width and
+                    player.x + TANK_WIDTH > obstacle.x and
+                    player.y < obstacle.y + obstacle.height and
+                    player.y + TANK_HEIGHT > obstacle.y):
+                    # 简单的碰撞响应：将坦克推回到障碍物外
+                    if player.x < obstacle.x:
+                        player.x = obstacle.x - TANK_WIDTH
+                    elif player.x > obstacle.x:
+                        player.x = obstacle.x + obstacle.width
+                
+                # 敌方坦克碰撞检测
+                for enemy in enemies[:]:
+                    if (enemy.x < obstacle.x + obstacle.width and
+                        enemy.x + TANK_WIDTH > obstacle.x and
+                        enemy.y < obstacle.y + obstacle.height and
+                        enemy.y + TANK_HEIGHT > obstacle.y):
+                        enemies.remove(enemy)
+
+            # 4. 坦克之间碰撞检测
+            for enemy in enemies[:]:
+                if (player.x < enemy.x + TANK_WIDTH and
+                    player.x + TANK_WIDTH > enemy.x and
+                    player.y < enemy.y + TANK_HEIGHT and
+                    player.y + TANK_HEIGHT > enemy.y):
                     running = False
                     win = False
+                    break
 
             # 绘制分数
             score_text = font.render(f"分数: {score}", True, WHITE)
             screen.blit(score_text, (10, 10))
+
+            # 检查游戏是否结束
+            if score >= 10:  # 击败10个敌人才算胜利
+                running = False
+                win = True
+            elif player.y <= 0 or player.y >= WINDOW_HEIGHT:  # 玩家坦克超出边界，游戏结束
+                running = False
+                win = False
 
             # 更新显示
             pygame.display.flip()
